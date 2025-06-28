@@ -1,5 +1,5 @@
 <?php
-	trait OrdersModel{
+	trait MaintainModel{
 		//ham liet ke danh sach cac ban ghi, co phan trang
 		public function modelRead($recordPerPage){
 			//lay tong to so ban ghi
@@ -10,9 +10,19 @@
 			$page = isset($_GET["p"]) && $_GET["p"] > 0 ? $_GET["p"]-1 : 0;
 			//lay tu ban ghi nao
 			$from = $page * $recordPerPage;
+			$search = isset($_GET["search"]) ? $_GET["search"] : null;
 			//thuc hien truy van
 			$conn = Connection::getInstance();
-			$query = $conn->query("select * from orders order by id,status desc limit $from, $recordPerPage");
+			$checkUser = "";
+			if ($search) {
+				$checkUser = "where customers.name like '%$search%'";
+			}
+
+			$query = $conn->query("select customers.name, customers.phone, customers.address, orderdetails.* from orderdetails
+			join orders on orderdetails.order_id = orders.id
+			join customers on customers.id = orders.customer_id
+			$checkUser
+			order by id,status desc limit $from, $recordPerPage");
 			//tra ve tat ca cac ban truy van duoc
 			return $query->fetchAll();
 		}
@@ -20,20 +30,12 @@
 		public function modelTotal(){
 			//---
 			$conn = Connection::getInstance();
-			$query = $conn->query("select id from orders");
+			$query = $conn->query("select id from orderdetails");
 			//lay tong so ban ghi
 			return $query->rowCount();
 			//---
 		}
-		//lay mot ban ghi table orders
-		public function modelGetOrders($id){
-			//---
-			$conn = Connection::getInstance();
-			$query = $conn->query("select * from orders where id = $id");
-			//tra ve mot ban ghi
-			return $query->fetch();
-			//---
-		}
+
 		//lay mot ban ghi trong table customers
 		public function modelGetCustomers($id){
 			//---
@@ -52,12 +54,6 @@
 			return $query->fetch();
 			//---
 		}
-		//xac nhan da giao hang
-		public function modelDelivery($id){
-			//---
-			$conn = Connection::getInstance();
-			$conn->query("update orders set status = 1 where id = $id");
-		}
 		//lay danh sach cac san pham trong talbe orderdetails
 		public function modelListOrderDetails($id){
 			//---
@@ -67,6 +63,12 @@
 			return $query->fetchAll();
 			//---
 		}
-
+		public function modelUpdate($id){
+			$id = isset($_POST["id"])&&is_numeric($_POST["id"])?$_POST["id"]:0;
+			$conn = Connection::getInstance();
+			$query = $conn->prepare("update orderdetails set status=:_status where id=:_id");
+			$query->execute([":_status"=>1,":_id"=>$id]);
+			return true;
+		}
 	}
  ?>

@@ -2,33 +2,14 @@
 	trait ProductsModel{
 		//lay danh sach cac ban ghi, co phan trang
 		public function modelRead($recordPerPage){
-			$category_id = isset($_GET["category_id"])&&is_numeric($_GET["category_id"])?$_GET["category_id"]:0;
 			//lay bien page truyen tu url
 			$page = isset($_GET["page"])&&is_numeric($_GET["page"])&&$_GET["page"]>0 ? $_GET["page"]-1 : 0;
 			//lay tu ban ghi nao
 			$from = $page * $recordPerPage;
 			//---
-			$sqlOrder = " order by id desc ";
-			//lay bien order truyen tu url
-			$order = isset($_GET["order"]) ? $_GET["order"] : "";
-			switch($order){
-				case "priceAsc":
-					$sqlOrder = " order by price asc ";
-				break;
-				case "priceDesc":
-					$sqlOrder = " order by price desc ";
-				break;
-				case "nameAsc":
-					$sqlOrder = " order by name asc ";
-				break;
-				case "nameDesc":
-					$sqlOrder = " order by name desc ";
-				break;
-			}
-			//---
 			//lay bien ket noi
 			$conn = Connection::getInstance();
-			$query = $conn->query("select * from products where category_id in (select id from categories where id=$category_id or parent_id=$category_id) $sqlOrder limit $from,$recordPerPage");
+			$query = $conn->query("select * from products order by id desc limit $from,$recordPerPage");
 			//lay tat ca ket qua tra ve
 			$result = $query->fetchAll();
 			//---
@@ -36,10 +17,9 @@
 		}
 		//ham tinh tong so ban ghi
 		public function modelTotal(){
-			$category_id = isset($_GET["category_id"])&&is_numeric($_GET["category_id"])?$_GET["category_id"]:0;
 			//lay bien ket noi
 			$conn = Connection::getInstance();
-			$query = $conn->query("select id from products where category_id in (select id from categories where id=$category_id or parent_id=$category_id)");
+			$query = $conn->query("select id from products");
 			//ham rowCount: dem so ket qua tra ve
 			return $query->rowCount();
 		}
@@ -59,17 +39,94 @@
 			$record = $query->fetch();
 			return $query->rowCount() > 0 ? $record->name : "";
 		}
-
-		public function getSold($id){
+		public function modelUpdate($id){
+			$id = isset($_GET["id"])&&is_numeric($_GET["id"])?$_GET["id"]:0;
+			$name = $_POST["name"];
+			$description = $_POST["description"];
+			$content = $_POST["content"];
+			$quantity = $_POST["quantity"];
+			$hot = isset($_POST["hot"])?1:0;
+			$price = $_POST["price"];
+			$discount = $_POST["discount"];
+			$category_id = $_POST["category_id"];
+			$ngaybaoduong = $_POST["ngaybaoduong"];
+			//update cot name
 			//lay bien ket noi
 			$conn = Connection::getInstance();
-			$query = $conn->query("select * from orderdetails where product_id=$id");
-			$record = $query->fetch();
-			$total = 0;
-			foreach ($record as $key => $value) {
-				$total += $value->number;
+			$query = $conn->prepare("update products set name=:_name,description=:_description,content=:_content,hot=:_hot,price=:_price,discount=:_discount,category_id=:_category_id,quantity=:quantity,ngaybaoduong=:ngaybaoduong where id=:_id");
+			$query->execute([":_name"=>$name,":_description"=>$description,":_content"=>$content,":_hot"=>$hot,":_price"=>$price,":_discount"=>$discount,":_category_id"=>$category_id,":quantity"=>$quantity,":ngaybaoduong"=>$ngaybaoduong,":_id"=>$id]);
+			//---
+			//neu user upload anh thi lay anh cu de xoa, sau do upload anh moi va update database
+			if($_FILES["photo"]["name"] != ""){
+				//---
+				//lay anh cu de xoa
+				$oldQuery = $conn->query("select photo from products where id=$id");
+				if($oldQuery->rowCount() > 0)
+					$oldPhoto = $oldQuery->fetch();
+					if(file_exists("../assets/upload/products/".$oldPhoto->photo))
+						unlink("../assets/upload/products/".$oldPhoto->photo);
+				//---
+				$photo = time()."_".$_FILES["photo"]["name"];
+				//upload anh moi
+				move_uploaded_file($_FILES["photo"]["tmp_name"],"../assets/upload/products/$photo");
+				//update csdl
+				$query = $conn->prepare("update products set photo = :_photo where id=:_id");
+				$query->execute([":_photo"=>$photo,":_id"=>$id]);
+				//---
 			}
-			return $total;
+			//---
+		}
+		public function modelCreate(){
+			$name = $_POST["name"];
+			$description = $_POST["description"];
+			$content = $_POST["content"];
+			$quantity = $_POST["quantity"];
+			$hot = isset($_POST["hot"])?1:0;
+			$photo = "";
+			$price = $_POST["price"];
+			$discount = $_POST["discount"];
+			$category_id = $_POST["category_id"];
+			$ngaybaoduong = $_POST["ngaybaoduong"];
+			//---
+			//neu user upload anh thi lay anh cu de xoa, sau do upload anh moi va update database
+			if($_FILES["photo"]["name"] != ""){
+				$photo = time()."_".$_FILES["photo"]["name"];
+				//upload anh moi
+				move_uploaded_file($_FILES["photo"]["tmp_name"],"../assets/upload/products/$photo");
+			}
+			//---
+			//lay bien ket noi
+			$conn = Connection::getInstance();
+			$query = $conn->prepare("insert into products set name=:_name,description=:_description,content=:_content,hot=:_hot,photo=:_photo,price=:_price,discount=:_discount,category_id=:_category_id,quantity=:_quantity,ngaybaoduong=:_ngaybaoduong");
+			$query->execute([":_name"=>$name,":_description"=>$description,":_content"=>$content,":_hot"=>$hot,":_photo"=>$photo,":_price"=>$price,":_discount"=>$discount,":_category_id"=>$category_id,":_quantity"=>$quantity,":_ngaybaoduong"=>$ngaybaoduong]);
+		}
+		//xoa ban ghi
+		public function modelDelete($id){
+			//lay bien ket noi
+			$conn = Connection::getInstance();
+			//---
+			//lay anh cu de xoa
+			$oldQuery = $conn->query("select photo from products where id=$id");
+			if($oldQuery->rowCount() > 0)
+				$oldPhoto = $oldQuery->fetch();
+				if(file_exists("../assets/upload/products/".$oldPhoto->photo))
+					unlink("../assets/upload/products/".$oldPhoto->photo);
+			//---
+			$conn->query("delete from products where id=$id");
+		}
+		public function modelListCategories(){
+			//lay bien ket noi
+			$conn = Connection::getInstance();
+			$query = $conn->query("select id,name from categories where parent_id = 0 order by id desc");
+			//tra ve mot ban ghi
+			return $query->fetchAll();
+		}
+		public function modelListCategoriesSub($id){
+			//lay bien ket noi
+			$conn = Connection::getInstance();
+			$query = $conn->query("select id,name from categories where parent_id = $id order by id desc");
+			//tra ve mot ban ghi
+			return $query->fetchAll();
 		}
 	}
  ?>
